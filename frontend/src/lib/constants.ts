@@ -1,0 +1,133 @@
+export const APP_NAME = "Transcripto";
+
+export const HE = {
+  // Navigation
+  nav: {
+    dashboard: "לוח בקרה",
+    projects: "פרויקטים",
+    newProject: "פרויקט חדש",
+    settings: "הגדרות",
+    search: "חיפוש...",
+    overview: "סקירה כללית",
+    management: "ניהול",
+  },
+
+  // Dashboard
+  dashboard: {
+    welcome: "בוקר טוב",
+    subtitle: "נהל את התמלולים שלך בקלות",
+    totalProjects: "סה״כ פרויקטים",
+    inProgress: "בתהליך",
+    completed: "הושלמו",
+    recentProjects: "פרויקטים אחרונים",
+    viewAll: "הצג הכל",
+    noProjects: "אין פרויקטים עדיין",
+    startFirst: "התחל את הפרויקט הראשון שלך",
+    stats: "סטטיסטיקה",
+  },
+
+  // Projects
+  project: {
+    title: "כותרת",
+    description: "תיאור",
+    created: "נוצר",
+    updated: "עודכן",
+    duration: "משך",
+    status: "סטטוס",
+    engine: "מנוע תמלול",
+    actions: "פעולות",
+    delete: "מחק",
+    edit: "ערוך",
+    export: "ייצוא",
+    transcribe: "תמלל",
+    autoTag: "תיוג אוטומטי",
+    uploadFile: "העלאת קובץ",
+    dragDrop: "גרור ושחרר קבצים כאן",
+    orClick: "או לחץ לבחירת קבצים",
+    supportedFormats: "פורמטים נתמכים: MP4, MP3, WAV, M4A, WebM, OGG",
+    newProject: "פרויקט חדש",
+    allProjects: "כל הפרויקטים",
+  },
+
+  // Status
+  status: {
+    uploaded: "הועלה",
+    extracting_audio: "מחלץ אודיו",
+    processing: "מעבד",
+    transcribed: "תומלל",
+    tagging: "מתייג",
+    tagged: "תויג",
+    reviewed: "נבדק",
+    completed: "הושלם",
+  },
+
+  // Tags
+  tags: {
+    title: "תגיות",
+    addTag: "הוסף תגית",
+    editTag: "ערוך תגית",
+    deleteTag: "מחק תגית",
+    label: "תווית",
+    category: "קטגוריה",
+    notes: "הערות",
+    auto: "אוטומטי",
+    manual: "ידני",
+    quote: "ציטוט",
+    topic_change: "שינוי נושא",
+    emotion: "רגש",
+    keyword: "מילת מפתח",
+    name_place: "שם/מקום",
+  },
+
+  // Transcript
+  transcript: {
+    title: "תמליל",
+    noTranscript: "אין תמליל עדיין",
+    startTranscription: "התחל תמלול",
+    segments: "קטעים",
+    speaker: "דובר",
+    confidence: "ביטחון",
+  },
+
+  // Export
+  export: {
+    title: "ייצוא",
+    format: "פורמט",
+    download: "הורדה",
+  },
+
+  // Common
+  common: {
+    save: "שמור",
+    cancel: "ביטול",
+    close: "סגור",
+    loading: "טוען...",
+    error: "שגיאה",
+    success: "הצלחה",
+    confirm: "אישור",
+    back: "חזור",
+    next: "הבא",
+    of: "מתוך",
+  },
+} as const;
+
+export const STATUS_COLORS: Record<string, string> = {
+  uploaded: "bg-blue-100 text-blue-700",
+  extracting_audio: "bg-yellow-100 text-yellow-700",
+  processing: "bg-orange-100 text-orange-700",
+  transcribed: "bg-emerald-100 text-emerald-700",
+  tagging: "bg-purple-100 text-purple-700",
+  tagged: "bg-violet-100 text-violet-700",
+  reviewed: "bg-cyan-100 text-cyan-700",
+  completed: "bg-green-100 text-green-700",
+};
+
+export const TAG_CATEGORY_COLORS: Record<string, string> = {
+  quote: "#8B5CF6",
+  topic_change: "#F59E0B",
+  emotion: "#EF4444",
+  keyword: "#3B82F6",
+  name_place: "#10B981",
+};
+
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
