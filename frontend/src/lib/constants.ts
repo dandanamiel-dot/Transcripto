@@ -79,6 +79,16 @@ export const HE = {
     name_place: "שם/מקום",
   },
 
+  // Player
+  player: {
+    play: "נגן",
+    pause: "השהה",
+    forward: "קדימה 5 שניות",
+    rewind: "אחורה 5 שניות",
+    speed: "מהירות",
+    noAudio: "אין קובץ אודיו",
+  },
+
   // Transcript
   transcript: {
     title: "תמליל",
@@ -87,6 +97,18 @@ export const HE = {
     segments: "קטעים",
     speaker: "דובר",
     confidence: "ביטחון",
+    extractingAudio: "מחלץ אודיו...",
+    transcribing: "מתמלל...",
+    transcriptionComplete: "התמלול הושלם",
+    transcriptionError: "שגיאה בתמלול",
+    liveSegments: "קטעים בזמן אמת",
+  },
+
+  // Engines
+  engines: {
+    title: "מנוע תמלול",
+    select: "בחר מנוע",
+    unavailable: "לא זמין",
   },
 
   // Export

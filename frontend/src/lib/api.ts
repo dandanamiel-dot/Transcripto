@@ -51,6 +51,13 @@ export interface Tag {
   created_at: string;
 }
 
+export interface Engine {
+  name: string;
+  label: string;
+  label_he: string;
+  available: boolean;
+}
+
 export interface DashboardStats {
   total_projects: number;
   in_progress: number;
@@ -80,10 +87,11 @@ export const api = {
       }),
     delete: (id: number) =>
       request<void>(`/api/projects/${id}`, { method: "DELETE" }),
-    transcribe: (id: number) =>
-      request<{ message: string }>(`/api/projects/${id}/transcribe`, {
-        method: "POST",
-      }),
+    transcribe: (id: number, engine?: string) =>
+      request<{ message: string }>(
+        `/api/projects/${id}/transcribe${engine ? `?engine=${encodeURIComponent(engine)}` : ""}`,
+        { method: "POST" },
+      ),
   },
 
   segments: {
@@ -115,6 +123,10 @@ export const api = {
       }),
     autoTag: (projectId: number) =>
       request<Tag[]>(`/api/projects/${projectId}/auto-tag`, { method: "POST" }),
+  },
+
+  engines: {
+    list: () => request<Engine[]>("/api/engines"),
   },
 
   exports: {
