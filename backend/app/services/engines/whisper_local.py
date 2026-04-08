@@ -33,7 +33,7 @@ class WhisperLocalEngine:
                 "start_time": seg.start,
                 "end_time": seg.end,
                 "text": seg.text.strip(),
-                "confidence": seg.avg_log_prob,
+                "confidence": seg.avg_logprob,
             }
             results.append(seg_data)
             if on_segment:

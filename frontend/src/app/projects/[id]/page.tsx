@@ -134,6 +134,8 @@ export default function ProjectDetailPage({
       })();
     } else if (txStore.status === "error") {
       setTranscribing(false);
+      // Refresh project to get updated status; don't reset store so error stays visible
+      api.projects.get(projectId).then(setProject).catch(() => {});
     }
   }, [txStore.status, projectId, txStore]);
 
@@ -281,34 +283,139 @@ export default function ProjectDetailPage({
             </div>
           )}
 
+          {/* Transcription error */}
+          {txStore.status === "error" && txStore.error && (
+            <Card className="mb-6 border-red-200 dark:border-red-900">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                  <span className="text-sm font-medium text-red-600 dark:text-red-400">
+                    {HE.transcript.transcriptionError}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2 font-mono">
+                  {txStore.error}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Transcription progress */}
           {transcribing && (
-            <Card className="mb-6">
-              <CardContent className="py-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="h-2.5 w-2.5 rounded-full bg-purple-500 animate-pulse" />
-                  <span className="text-sm font-medium">
-                    {txStore.status === "extracting_audio"
-                      ? HE.transcript.extractingAudio
-                      : txStore.status === "processing"
-                        ? HE.transcript.transcribing
-                        : HE.common.loading}
-                  </span>
-                  {txStore.liveSegments.length > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {txStore.liveSegments.length} {HE.transcript.segments}
-                    </span>
-                  )}
+            <Card className="mb-6 border-purple-200 dark:border-purple-900/50 overflow-hidden">
+              <CardContent className="py-5">
+                {/* Steps indicator */}
+                <div className="flex items-center gap-6 mb-5">
+                  {(
+                    [
+                      { key: "extracting_audio", label: HE.transcript.extractingAudio },
+                      { key: "processing", label: HE.transcript.transcribing },
+                    ] as const
+                  ).map((step, i) => {
+                    const isActive =
+                      txStore.status === step.key;
+                    const isDone =
+                      step.key === "extracting_audio" &&
+                      (txStore.status === "processing" || txStore.status === "complete");
+                    return (
+                      <div key={step.key} className="flex items-center gap-2">
+                        <div className="relative flex items-center justify-center">
+                          <div
+                            className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${
+                              isDone
+                                ? "bg-purple-500 text-white"
+                                : isActive
+                                  ? "bg-purple-500/20 text-purple-600 dark:text-purple-400 ring-2 ring-purple-500/50"
+                                  : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {isDone ? "✓" : i + 1}
+                          </div>
+                          {isActive && (
+                            <div className="absolute inset-0 rounded-full animate-ping bg-purple-500/20" />
+                          )}
+                        </div>
+                        <span
+                          className={`text-sm transition-colors duration-300 ${
+                            isActive
+                              ? "font-semibold text-foreground"
+                              : isDone
+                                ? "text-muted-foreground"
+                                : "text-muted-foreground/60"
+                          }`}
+                        >
+                          {step.label}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
+
+                {/* Progress bar */}
+                {(() => {
+                  const lastSeg = txStore.liveSegments[txStore.liveSegments.length - 1];
+                  const progress =
+                    txStore.status === "extracting_audio"
+                      ? null
+                      : txStore.duration && lastSeg
+                        ? Math.min(
+                            Math.round((lastSeg.end_time / txStore.duration) * 100),
+                            99,
+                          )
+                        : 0;
+                  return (
+                    <div className="space-y-2">
+                      <div dir="ltr" className="relative h-2.5 w-full rounded-full bg-muted overflow-hidden">
+                        {progress === null ? (
+                          /* Indeterminate shimmer for audio extraction */
+                          <div
+                            className="absolute inset-0 rounded-full"
+                            style={{
+                              background:
+                                "linear-gradient(90deg, transparent 0%, oklch(0.55 0.22 275 / 0.5) 50%, transparent 100%)",
+                              animation: "shimmer 1.5s ease-in-out infinite",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            className="h-full rounded-full transition-all duration-700 ease-out"
+                            style={{
+                              width: `${progress}%`,
+                              background:
+                                "linear-gradient(90deg, oklch(0.55 0.22 275), oklch(0.65 0.20 280))",
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>
+                          {txStore.liveSegments.length > 0
+                            ? `${txStore.liveSegments.length} ${HE.transcript.segments}`
+                            : txStore.status === "extracting_audio"
+                              ? HE.transcript.extractingAudio
+                              : HE.common.loading}
+                        </span>
+                        {progress !== null && progress > 0 && (
+                          <span className="font-mono tabular-nums">
+                            {progress}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Live segments feed */}
                 {txStore.liveSegments.length > 0 && (
-                  <ScrollArea className="h-[200px]">
+                  <ScrollArea className="h-[180px] mt-4">
                     <div className="space-y-1">
-                      {txStore.liveSegments.map((seg) => (
+                      {txStore.liveSegments.map((seg, i) => (
                         <div
                           key={seg.segment_index}
-                          className="flex gap-3 rounded-md p-2 text-sm bg-muted/30"
+                          className="flex gap-3 rounded-md p-2 text-sm bg-muted/30 animate-in fade-in slide-in-from-bottom-1 duration-300"
+                          style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
                         >
-                          <span className="shrink-0 text-xs font-mono text-muted-foreground">
+                          <span className="shrink-0 text-xs font-mono text-muted-foreground pt-0.5">
                             {formatTime(seg.start_time)}
                           </span>
                           <p className="text-sm">{seg.text}</p>

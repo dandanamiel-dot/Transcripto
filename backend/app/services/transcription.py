@@ -50,23 +50,37 @@ async def run_transcription(
             # Step 2: Transcribe with selected engine
             project.status = "processing"
             await db.commit()
-            await cb({"type": "status", "step": "processing"})
+            await cb({"type": "status", "step": "processing", "duration": duration})
 
-            live_segments: list[dict] = []
+            # Use a queue so segments are broadcast in real-time from the
+            # background thread, rather than batched after completion.
+            segment_queue: asyncio.Queue[dict | None] = asyncio.Queue()
+            loop = asyncio.get_running_loop()
 
             def on_segment(index: int, seg_data: dict):
-                live_segments.append(seg_data)
+                loop.call_soon_threadsafe(segment_queue.put_nowait, seg_data)
 
-            segments_data = await asyncio.to_thread(
-                engine.transcribe,
-                audio_path,
-                settings.default_language,
-                on_segment,
-            )
+            # Run transcription in a thread; when done put a sentinel.
+            async def _transcribe():
+                result = await asyncio.to_thread(
+                    engine.transcribe,
+                    audio_path,
+                    settings.default_language,
+                    on_segment,
+                )
+                await segment_queue.put(None)  # sentinel
+                return result
 
-            # Broadcast collected segments
-            for seg_data in live_segments:
+            transcribe_task = asyncio.create_task(_transcribe())
+
+            # Broadcast segments as they arrive
+            while True:
+                seg_data = await segment_queue.get()
+                if seg_data is None:
+                    break
                 await cb({"type": "segment", "data": seg_data})
+
+            segments_data = await transcribe_task
 
             # Step 3: Save segments (clear old ones first)
             old_segments = await db.execute(

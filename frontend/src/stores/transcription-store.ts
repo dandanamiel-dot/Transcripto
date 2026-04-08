@@ -15,6 +15,7 @@ interface TranscriptionState {
   segmentCount: number;
   error: string | null;
   ws: WebSocket | null;
+  duration: number | null;
 
   connect: (projectId: number) => void;
   disconnect: () => void;
@@ -29,6 +30,7 @@ export const useTranscriptionStore = create<TranscriptionState>((set, get) => ({
   segmentCount: 0,
   error: null,
   ws: null,
+  duration: null,
 
   connect: (projectId: number) => {
     const prev = get().ws;
@@ -42,7 +44,7 @@ export const useTranscriptionStore = create<TranscriptionState>((set, get) => ({
     );
 
     ws.onopen = () => {
-      set({ status: "idle", liveSegments: [], error: null, ws });
+      set({ status: "idle", liveSegments: [], error: null, ws, duration: null });
     };
 
     ws.onmessage = (event) => {
@@ -51,7 +53,10 @@ export const useTranscriptionStore = create<TranscriptionState>((set, get) => ({
 
         switch (data.type) {
           case "status":
-            set({ status: data.step as TranscriptionStatus });
+            set((s) => ({
+              status: data.step as TranscriptionStatus,
+              duration: data.duration ?? s.duration,
+            }));
             break;
 
           case "segment": {
@@ -111,6 +116,7 @@ export const useTranscriptionStore = create<TranscriptionState>((set, get) => ({
       segmentCount: 0,
       error: null,
       ws: null,
+      duration: null,
     });
   },
 }));
