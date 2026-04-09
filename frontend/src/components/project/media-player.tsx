@@ -3,8 +3,15 @@
 import { useRef, useEffect, useCallback } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { usePlayerStore } from "@/stores/player-store";
 import { BACKEND_URL, HE } from "@/lib/constants";
+import type { Tag } from "@/lib/api";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -14,7 +21,13 @@ function formatTime(seconds: number): string {
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-export function MediaPlayer({ projectId }: { projectId: number }) {
+export function MediaPlayer({
+  projectId,
+  tags = [],
+}: {
+  projectId: number;
+  tags?: Tag[];
+}) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
 
@@ -28,6 +41,7 @@ export function MediaPlayer({ projectId }: { projectId: number }) {
     setIsPlaying,
     setPlaybackRate,
     registerSeekCallback,
+    seekTo,
   } = usePlayerStore();
 
   // Register seek callback so other components can control playback
@@ -100,20 +114,45 @@ export function MediaPlayer({ projectId }: { projectId: number }) {
         onEnded={() => setIsPlaying(false)}
       />
 
-      {/* Progress bar */}
-      <div
-        ref={progressRef}
-        className="relative h-2 w-full cursor-pointer rounded-full bg-muted"
-        onClick={handleProgressClick}
-      >
+      {/* Progress bar with tag markers */}
+      <TooltipProvider>
         <div
-          className="absolute top-0 end-0 h-full rounded-full transition-[width] duration-100"
-          style={{
-            width: `${progress}%`,
-            backgroundColor: "oklch(0.55 0.22 275)",
-          }}
-        />
-      </div>
+          ref={progressRef}
+          className="relative h-3 w-full cursor-pointer rounded-full bg-muted"
+          onClick={handleProgressClick}
+        >
+          <div
+            className="absolute top-0 end-0 h-full rounded-full transition-[width] duration-100"
+            style={{
+              width: `${progress}%`,
+              backgroundColor: "oklch(0.55 0.22 275)",
+            }}
+          />
+          {/* Tag markers */}
+          {tags.map((tag) => {
+            if (tag.timestamp == null || !duration) return null;
+            const pct = (tag.timestamp / duration) * 100;
+            return (
+              <Tooltip key={tag.id}>
+                <TooltipTrigger
+                  render={<button type="button" />}
+                  className="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-background cursor-pointer z-10 hover:scale-150 transition-transform"
+                  style={{
+                    right: `${pct}%`,
+                    backgroundColor: tag.color,
+                    transform: `translate(50%, -50%)`,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    seekTo(tag.timestamp!);
+                  }}
+                />
+                <TooltipContent side="top">{tag.label}</TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      </TooltipProvider>
 
       {/* Controls */}
       <div className="flex items-center justify-between">

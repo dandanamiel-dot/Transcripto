@@ -11,6 +11,8 @@ import {
   Pencil,
   Check,
   X,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -22,8 +24,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { api, type Project, type Segment, type Tag, type Engine } from "@/lib/api";
+import { api, type Project, type Segment, type Tag, type Engine, type LlmProvider } from "@/lib/api";
 import { HE, TAG_CATEGORY_COLORS } from "@/lib/constants";
+import { TagEditorDialog } from "@/components/project/tag-editor-dialog";
 import { usePlayerStore } from "@/stores/player-store";
 import { useTranscriptionStore } from "@/stores/transcription-store";
 
@@ -58,6 +61,13 @@ export default function ProjectDetailPage({
   const [transcribing, setTranscribing] = useState(false);
   const [engines, setEngines] = useState<Engine[]>([]);
   const [selectedEngine, setSelectedEngine] = useState("faster-whisper");
+  const [llmProviders, setLlmProviders] = useState<LlmProvider[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState("groq");
+  const [tagging, setTagging] = useState(false);
+
+  // Tag editor dialog state
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState<Tag | null>(null);
 
   // Inline editing state
   const [editingSegmentId, setEditingSegmentId] = useState<number | null>(null);
@@ -80,12 +90,14 @@ export default function ProjectDetailPage({
       api.segments.list(projectId).catch(() => []),
       api.tags.list(projectId).catch(() => []),
       api.engines.list().catch(() => []),
+      api.llmProviders.list().catch(() => []),
     ])
-      .then(([proj, segs, tgs, engs]) => {
+      .then(([proj, segs, tgs, engs, providers]) => {
         setProject(proj);
         setSegments(segs);
         setTags(tgs);
         setEngines(engs);
+        setLlmProviders(providers);
       })
       .finally(() => setLoading(false));
   }, [projectId]);
@@ -140,12 +152,40 @@ export default function ProjectDetailPage({
   }, [txStore.status, projectId, txStore]);
 
   const handleAutoTag = async () => {
+    setTagging(true);
     try {
-      const newTags = await api.tags.autoTag(projectId);
-      setTags((prev) => [...prev, ...newTags]);
+      const newTags = await api.tags.autoTag(projectId, selectedProvider);
+      // Replace auto tags (backend deletes old ones), keep manual tags
+      setTags((prev) => [
+        ...prev.filter((t) => t.tag_type !== "auto"),
+        ...newTags,
+      ]);
+      const proj = await api.projects.get(projectId);
+      setProject(proj);
+    } catch {
+      // handle error
+    } finally {
+      setTagging(false);
+    }
+  };
+
+  const handleDeleteTag = async (tagId: number) => {
+    try {
+      await api.tags.delete(projectId, tagId);
+      setTags((prev) => prev.filter((t) => t.id !== tagId));
     } catch {
       // handle error
     }
+  };
+
+  const handleTagSaved = (savedTag: Tag) => {
+    setTags((prev) => {
+      const exists = prev.find((t) => t.id === savedTag.id);
+      if (exists) {
+        return prev.map((t) => (t.id === savedTag.id ? savedTag : t));
+      }
+      return [...prev, savedTag];
+    });
   };
 
   // --- Inline segment editing ---
@@ -263,12 +303,36 @@ export default function ProjectDetailPage({
                 </Button>
               )}
               {(project.status === "transcribed" ||
-                project.status === "tagged") && (
-                <Button variant="outline" onClick={handleAutoTag}>
-                  <Sparkles className="h-4 w-4 me-2" />
-                  {HE.project.autoTag}
-                </Button>
-              )}
+                project.status === "tagged") &&
+                llmProviders.length > 0 && (
+                  <>
+                    <select
+                      value={selectedProvider}
+                      onChange={(e) => setSelectedProvider(e.target.value)}
+                      disabled={tagging}
+                      className="rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      {llmProviders.map((p) => (
+                        <option
+                          key={p.name}
+                          value={p.name}
+                          disabled={!p.available}
+                        >
+                          {p.label_he}
+                          {!p.available ? ` (${HE.llmProviders.unavailable})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="outline"
+                      onClick={handleAutoTag}
+                      disabled={tagging}
+                    >
+                      <Sparkles className="h-4 w-4 me-2" />
+                      {tagging ? HE.tags.autoTagging : HE.project.autoTag}
+                    </Button>
+                  </>
+                )}
               <Button variant="outline">
                 <Download className="h-4 w-4 me-2" />
                 {HE.project.export}
@@ -279,7 +343,7 @@ export default function ProjectDetailPage({
           {/* Media Player */}
           {hasAudio && (
             <div className="mb-6">
-              <MediaPlayer projectId={projectId} />
+              <MediaPlayer projectId={projectId} tags={tags} />
             </div>
           )}
 
@@ -563,9 +627,22 @@ export default function ProjectDetailPage({
                       <TagIcon className="h-4 w-4" />
                       {HE.tags.title}
                     </span>
-                    <span className="text-sm font-normal text-muted-foreground">
-                      {tags.length}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-normal text-muted-foreground">
+                        {tags.length}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => {
+                          setEditingTag(null);
+                          setTagDialogOpen(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -575,7 +652,7 @@ export default function ProjectDetailPage({
                         {tags.map((tag) => (
                           <div
                             key={tag.id}
-                            className="rounded-lg border p-3 space-y-1 cursor-pointer hover:bg-muted/50 transition-colors"
+                            className="group rounded-lg border p-3 space-y-1 cursor-pointer hover:bg-muted/50 transition-colors"
                             onClick={() => {
                               if (tag.timestamp != null) seekTo(tag.timestamp);
                             }}
@@ -584,26 +661,47 @@ export default function ProjectDetailPage({
                               <span className="text-sm font-medium">
                                 {tag.label}
                               </span>
-                              <Badge
-                                variant="secondary"
-                                className="text-xs"
-                                style={{
-                                  backgroundColor: tag.category
-                                    ? `${TAG_CATEGORY_COLORS[tag.category]}20`
-                                    : undefined,
-                                  color: tag.category
-                                    ? TAG_CATEGORY_COLORS[tag.category]
-                                    : undefined,
-                                }}
-                              >
-                                {tag.category
-                                  ? HE.tags[
-                                      tag.category as keyof typeof HE.tags
-                                    ]
-                                  : tag.tag_type === "auto"
-                                    ? HE.tags.auto
-                                    : HE.tags.manual}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-xs"
+                                  style={{
+                                    backgroundColor: tag.category
+                                      ? `${TAG_CATEGORY_COLORS[tag.category]}20`
+                                      : undefined,
+                                    color: tag.category
+                                      ? TAG_CATEGORY_COLORS[tag.category]
+                                      : undefined,
+                                  }}
+                                >
+                                  {tag.category
+                                    ? HE.tags[
+                                        tag.category as keyof typeof HE.tags
+                                      ]
+                                    : tag.tag_type === "auto"
+                                      ? HE.tags.auto
+                                      : HE.tags.manual}
+                                </Badge>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingTag(tag);
+                                    setTagDialogOpen(true);
+                                  }}
+                                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+                                >
+                                  <Pencil className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteTag(tag.id);
+                                  }}
+                                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
+                                >
+                                  <Trash2 className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                              </div>
                             </div>
                             {tag.timestamp != null && (
                               <p className="text-xs text-muted-foreground font-mono">
@@ -620,9 +718,22 @@ export default function ProjectDetailPage({
                       </div>
                     </ScrollArea>
                   ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      {HE.tags.addTag}
-                    </p>
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        {HE.tags.noTags}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingTag(null);
+                          setTagDialogOpen(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 me-1" />
+                        {HE.tags.addTag}
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -630,6 +741,15 @@ export default function ProjectDetailPage({
           </div>
         </main>
       </div>
+
+      <TagEditorDialog
+        open={tagDialogOpen}
+        onOpenChange={setTagDialogOpen}
+        projectId={projectId}
+        segments={segments}
+        tag={editingTag}
+        onSave={handleTagSaved}
+      />
     </div>
   );
 }

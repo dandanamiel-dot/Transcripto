@@ -58,6 +58,13 @@ export interface Engine {
   available: boolean;
 }
 
+export interface LlmProvider {
+  name: string;
+  label: string;
+  label_he: string;
+  available: boolean;
+}
+
 export interface DashboardStats {
   total_projects: number;
   in_progress: number;
@@ -121,12 +128,19 @@ export const api = {
       request<void>(`/api/projects/${projectId}/tags/${tagId}`, {
         method: "DELETE",
       }),
-    autoTag: (projectId: number) =>
-      request<Tag[]>(`/api/projects/${projectId}/auto-tag`, { method: "POST" }),
+    autoTag: (projectId: number, provider?: string) =>
+      request<Tag[]>(
+        `/api/projects/${projectId}/auto-tag${provider ? `?provider=${encodeURIComponent(provider)}` : ""}`,
+        { method: "POST" },
+      ),
   },
 
   engines: {
     list: () => request<Engine[]>("/api/engines"),
+  },
+
+  llmProviders: {
+    list: () => request<LlmProvider[]>("/api/llm-providers"),
   },
 
   exports: {

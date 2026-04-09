@@ -77,6 +77,21 @@ export const HE = {
     emotion: "רגש",
     keyword: "מילת מפתח",
     name_place: "שם/מקום",
+    timestamp: "חותמת זמן",
+    endTimestamp: "חותמת זמן סיום",
+    segment: "קטע",
+    selectCategory: "בחר קטגוריה",
+    selectSegment: "בחר קטע",
+    noTags: "אין תגיות עדיין",
+    autoTagging: "מתייג אוטומטית...",
+    confirmDelete: "האם למחוק תגית זו?",
+  },
+
+  // LLM Providers
+  llmProviders: {
+    title: "ספק AI",
+    select: "בחר ספק",
+    unavailable: "לא זמין",
   },
 
   // Player
