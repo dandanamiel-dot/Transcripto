@@ -12,9 +12,15 @@ ENGINES: dict[str, dict] = {
         "available": True,
     },
     "ivrit-ai": {
-        "engine": WhisperLocalEngine(model_name="ivrit-ai/whisper-v2-d3-e3"),
-        "label": "ivrit-ai (Hebrew)",
-        "label_he": "ivrit-ai (עברית)",
+        "engine": WhisperLocalEngine(model_name="ivrit-ai/whisper-large-v3-ct2"),
+        "label": "ivrit-ai large-v3 (Hebrew)",
+        "label_he": "ivrit-ai large-v3 (עברית)",
+        "available": True,
+    },
+    "ivrit-ai-turbo": {
+        "engine": WhisperLocalEngine(model_name="ivrit-ai/whisper-large-v3-turbo-ct2"),
+        "label": "ivrit-ai Turbo (Hebrew)",
+        "label_he": "ivrit-ai טורבו (עברית)",
         "available": True,
     },
     "groq": {
