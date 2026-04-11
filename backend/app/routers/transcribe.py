@@ -15,6 +15,7 @@ async def transcribe_project(
     project_id: int,
     background_tasks: BackgroundTasks,
     engine: str = Query(default="faster-whisper"),
+    diarize: bool | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     project = await db.get(Project, project_id)
@@ -42,6 +43,10 @@ async def transcribe_project(
 
     progress_callback = get_progress_callback(project_id)
     background_tasks.add_task(
-        run_transcription, project_id, progress_callback, engine
+        run_transcription, project_id, progress_callback, engine, diarize
     )
-    return {"message": "Transcription started", "engine": engine}
+    return {
+        "message": "Transcription started",
+        "engine": engine,
+        "diarize": diarize,
+    }

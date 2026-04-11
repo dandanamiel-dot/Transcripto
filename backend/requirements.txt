@@ -11,3 +11,14 @@ faster-whisper==1.1.1
 httpx==0.28.1
 websockets==15.0.1
 requests>=2.31.0
+pyannote.audio==3.3.2
+# torch/torchaudio pinned: 2.5.x is the newest pair where torch.load still
+# defaults to weights_only=False (pyannote checkpoints are pickled) AND
+# torchaudio still exposes AudioMetaData (removed in 2.7+).
+torch==2.5.1
+torchaudio==2.5.1
+# huggingface_hub<1.0 because pyannote.audio 3.3.2 still passes the legacy
+# `use_auth_token` kwarg to hf_hub_download(), removed in 1.0.
+huggingface_hub<1.0
+# pyannote internally imports matplotlib in its task definitions
+matplotlib

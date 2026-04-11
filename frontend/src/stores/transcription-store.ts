@@ -6,6 +6,8 @@ type TranscriptionStatus =
   | "idle"
   | "extracting_audio"
   | "processing"
+  | "diarizing"
+  | "diarize_failed"
   | "complete"
   | "error";
 

@@ -1,19 +1,15 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { WaveformPlayer } from "@/components/project/waveform-player";
 import { usePlayerStore } from "@/stores/player-store";
-import { BACKEND_URL, HE } from "@/lib/constants";
+import { HE } from "@/lib/constants";
 import type { Tag } from "@/lib/api";
 
 function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
@@ -28,69 +24,22 @@ export function MediaPlayer({
   projectId: number;
   tags?: Tag[];
 }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const progressRef = useRef<HTMLDivElement>(null);
-
   const {
     currentTime,
     duration,
     isPlaying,
     playbackRate,
-    setCurrentTime,
-    setDuration,
-    setIsPlaying,
     setPlaybackRate,
-    registerSeekCallback,
     seekTo,
+    togglePlay,
   } = usePlayerStore();
 
-  // Register seek callback so other components can control playback
-  useEffect(() => {
-    registerSeekCallback((t: number) => {
-      const audio = audioRef.current;
-      if (audio) {
-        audio.currentTime = t;
-        if (!isPlaying) {
-          audio.play();
-        }
-      }
-    });
-  }, [registerSeekCallback, isPlaying]);
-
-  // Sync playback rate to audio element
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) audio.playbackRate = playbackRate;
-  }, [playbackRate]);
-
-  const togglePlay = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) {
-      audio.play();
-    } else {
-      audio.pause();
-    }
-  }, []);
-
-  const skip = useCallback((delta: number) => {
-    const audio = audioRef.current;
-    if (audio) {
-      audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + delta));
-    }
-  }, []);
-
-  const handleProgressClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const bar = progressRef.current;
-      const audio = audioRef.current;
-      if (!bar || !audio || !duration) return;
-      const rect = bar.getBoundingClientRect();
-      // RTL: progress goes right-to-left
-      const ratio = (rect.right - e.clientX) / rect.width;
-      audio.currentTime = Math.max(0, ratio * duration);
+  const skip = useCallback(
+    (delta: number) => {
+      const target = Math.max(0, Math.min(duration || 0, currentTime + delta));
+      seekTo(target);
     },
-    [duration],
+    [currentTime, duration, seekTo],
   );
 
   const cycleRate = useCallback(() => {
@@ -99,60 +48,9 @@ export function MediaPlayer({
     setPlaybackRate(next);
   }, [playbackRate, setPlaybackRate]);
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3">
-      <audio
-        ref={audioRef}
-        src={`${BACKEND_URL}/api/projects/${projectId}/audio`}
-        preload="metadata"
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onDurationChange={(e) => setDuration(e.currentTarget.duration)}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => setIsPlaying(false)}
-      />
-
-      {/* Progress bar with tag markers */}
-      <TooltipProvider>
-        <div
-          ref={progressRef}
-          className="relative h-3 w-full cursor-pointer rounded-full bg-muted"
-          onClick={handleProgressClick}
-        >
-          <div
-            className="absolute top-0 end-0 h-full rounded-full transition-[width] duration-100"
-            style={{
-              width: `${progress}%`,
-              backgroundColor: "oklch(0.55 0.22 275)",
-            }}
-          />
-          {/* Tag markers */}
-          {tags.map((tag) => {
-            if (tag.timestamp == null || !duration) return null;
-            const pct = (tag.timestamp / duration) * 100;
-            return (
-              <Tooltip key={tag.id}>
-                <TooltipTrigger
-                  render={<button type="button" />}
-                  className="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full border-2 border-background cursor-pointer z-10 hover:scale-150 transition-transform"
-                  style={{
-                    right: `${pct}%`,
-                    backgroundColor: tag.color,
-                    transform: `translate(50%, -50%)`,
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    seekTo(tag.timestamp!);
-                  }}
-                />
-                <TooltipContent side="top">{tag.label}</TooltipContent>
-              </Tooltip>
-            );
-          })}
-        </div>
-      </TooltipProvider>
+      <WaveformPlayer projectId={projectId} tags={tags} />
 
       {/* Controls */}
       <div className="flex items-center justify-between">

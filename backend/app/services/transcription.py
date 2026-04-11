@@ -8,6 +8,7 @@ from app.config import settings
 from app.database import async_session
 from app.models import Project, Segment
 from app.services.audio_processor import extract_audio
+from app.services.diarization import assign_speakers, diarize
 from app.services.engines import get_engine
 
 logger = logging.getLogger(__name__)
@@ -23,10 +24,18 @@ async def run_transcription(
     project_id: int,
     progress_callback: ProgressCallback | None = None,
     engine_name: str = "faster-whisper",
+    diarize_enabled: bool | None = None,
 ):
-    """Background task: extract audio, transcribe with selected engine, save segments."""
+    """Background task: extract audio, transcribe with selected engine, save segments.
+
+    If diarize_enabled is True (or None and settings.enable_diarization is True),
+    a speaker diarization pass runs after transcription and populates segment.speaker.
+    """
     cb = progress_callback or _noop_callback
     engine = get_engine(engine_name)
+    should_diarize = (
+        diarize_enabled if diarize_enabled is not None else settings.enable_diarization
+    )
 
     async with async_session() as db:
         project = await db.get(Project, project_id)
@@ -81,6 +90,32 @@ async def run_transcription(
                 await cb({"type": "segment", "data": seg_data})
 
             segments_data = await transcribe_task
+
+            # Step 2b: Optional speaker diarization
+            if should_diarize:
+                await cb({"type": "status", "step": "diarizing"})
+                try:
+                    turns = await asyncio.to_thread(
+                        diarize, audio_path, settings.hf_token
+                    )
+                    assign_speakers(segments_data, turns)
+                    logger.info(
+                        f"Diarization complete for project {project_id}: "
+                        f"{len(turns)} turns across "
+                        f"{len({t['speaker'] for t in turns})} speakers"
+                    )
+                except Exception as e:
+                    # Non-fatal — keep the transcript, skip speaker labels.
+                    logger.exception(
+                        f"Diarization failed for project {project_id}: {e}"
+                    )
+                    await cb(
+                        {
+                            "type": "status",
+                            "step": "diarize_failed",
+                            "message": str(e),
+                        }
+                    )
 
             # Step 3: Save segments (clear old ones first)
             old_segments = await db.execute(

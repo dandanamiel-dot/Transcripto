@@ -5,7 +5,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import auto_tag, dashboard, engines, llm_providers, media, projects, segments, tags, transcribe, ws
+from app.routers import (
+    auto_tag,
+    dashboard,
+    engines,
+    exports,
+    llm_providers,
+    media,
+    projects,
+    segments,
+    tags,
+    transcribe,
+    ws,
+)
 
 
 @asynccontextmanager
@@ -27,6 +39,7 @@ app.add_middleware(
 app.include_router(auto_tag.router)
 app.include_router(dashboard.router)
 app.include_router(engines.router)
+app.include_router(exports.router)
 app.include_router(llm_providers.router)
 app.include_router(media.router)
 app.include_router(projects.router)

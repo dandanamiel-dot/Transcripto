@@ -19,67 +19,104 @@ const ACCEPTED_TYPES = [
 ];
 
 interface UploadZoneProps {
-  onFileSelected: (file: File) => void;
+  onFilesSelected: (files: File[]) => void;
   disabled?: boolean;
+  multiple?: boolean;
 }
 
-export function UploadZone({ onFileSelected, disabled }: UploadZoneProps) {
-  const [dragActive, setDragActive] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+function formatSize(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
-  const handleFile = useCallback(
-    (file: File) => {
-      setSelectedFile(file);
-      onFileSelected(file);
+export function UploadZone({
+  onFilesSelected,
+  disabled,
+  multiple = false,
+}: UploadZoneProps) {
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+  const setFiles = useCallback(
+    (files: File[]) => {
+      if (!files.length) return;
+      const next = multiple ? files : files.slice(0, 1);
+      setSelectedFiles(next);
+      onFilesSelected(next);
     },
-    [onFileSelected]
+    [multiple, onFilesSelected],
   );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragActive(false);
-      const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length) setFiles(files);
     },
-    [handleFile]
+    [setFiles],
   );
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
+      const files = Array.from(e.target.files ?? []);
+      if (files.length) setFiles(files);
     },
-    [handleFile]
+    [setFiles],
   );
+
+  const removeFile = (idx: number) => {
+    const next = selectedFiles.filter((_, i) => i !== idx);
+    setSelectedFiles(next);
+    onFilesSelected(next);
+  };
 
   return (
     <Card
       className={cn(
         "border-2 border-dashed transition-colors",
         dragActive && "border-primary bg-primary/5",
-        disabled && "opacity-50 pointer-events-none"
+        disabled && "opacity-50 pointer-events-none",
       )}
     >
       <CardContent className="p-0">
-        {selectedFile ? (
-          <div className="flex items-center justify-between p-6">
-            <div className="flex items-center gap-3">
-              <FileAudio className="h-8 w-8 text-primary" />
-              <div>
-                <p className="text-sm font-medium">{selectedFile.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
-                </p>
+        {selectedFiles.length > 0 ? (
+          <div className="p-4 space-y-2">
+            {selectedFiles.map((file, idx) => (
+              <div
+                key={`${file.name}-${idx}`}
+                className="flex items-center justify-between rounded-md bg-muted/30 p-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileAudio className="h-6 w-6 text-primary shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{file.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatSize(file.size)}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeFile(idx)}
+                  type="button"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSelectedFile(null)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            ))}
+            {multiple && (
+              <label className="flex cursor-pointer items-center justify-center rounded-md border border-dashed py-3 text-sm text-muted-foreground hover:bg-muted/30">
+                + {HE.project.orClick}
+                <input
+                  type="file"
+                  className="hidden"
+                  accept={ACCEPTED_TYPES.join(",")}
+                  multiple
+                  onChange={handleChange}
+                />
+              </label>
+            )}
           </div>
         ) : (
           <label
@@ -103,6 +140,7 @@ export function UploadZone({ onFileSelected, disabled }: UploadZoneProps) {
               type="file"
               className="hidden"
               accept={ACCEPTED_TYPES.join(",")}
+              multiple={multiple}
               onChange={handleChange}
             />
           </label>

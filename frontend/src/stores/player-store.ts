@@ -14,9 +14,12 @@ interface PlayerState {
   setActiveSegmentId: (id: number | null) => void;
   seekTo: (t: number) => void;
 
-  // Audio element ref is stored outside Zustand (set by MediaPlayer)
+  // Imperative callbacks registered by the player component
   _seekCallback: ((t: number) => void) | null;
   registerSeekCallback: (cb: (t: number) => void) => void;
+  _togglePlayCallback: (() => void) | null;
+  registerTogglePlayCallback: (cb: () => void) => void;
+  togglePlay: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -39,4 +42,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   _seekCallback: null,
   registerSeekCallback: (cb) => set({ _seekCallback: cb }),
+
+  _togglePlayCallback: null,
+  registerTogglePlayCallback: (cb) => set({ _togglePlayCallback: cb }),
+  togglePlay: () => {
+    const cb = get()._togglePlayCallback;
+    if (cb) cb();
+  },
 }));

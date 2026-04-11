@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   Play,
@@ -24,8 +25,14 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { api, type Project, type Segment, type Tag, type Engine, type LlmProvider } from "@/lib/api";
-import { HE, TAG_CATEGORY_COLORS } from "@/lib/constants";
+import { HE, TAG_CATEGORY_COLORS, speakerColor, speakerLabel } from "@/lib/constants";
 import { TagEditorDialog } from "@/components/project/tag-editor-dialog";
 import { usePlayerStore } from "@/stores/player-store";
 import { useTranscriptionStore } from "@/stores/transcription-store";
@@ -35,6 +42,20 @@ function formatTime(seconds: number): string {
   const s = Math.floor(seconds % 60);
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
+
+const listContainerVariants = {
+  hidden: { opacity: 1 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.02, delayChildren: 0.04 },
+  },
+};
+
+const listItemVariants = {
+  hidden: { opacity: 0, y: 6 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.22 } },
+  exit: { opacity: 0, y: -4, transition: { duration: 0.15 } },
+};
 
 /** Find the active segment index for a given playback time. */
 function findActiveSegment(segments: Segment[], time: number): number | null {
@@ -61,9 +82,11 @@ export default function ProjectDetailPage({
   const [transcribing, setTranscribing] = useState(false);
   const [engines, setEngines] = useState<Engine[]>([]);
   const [selectedEngine, setSelectedEngine] = useState("faster-whisper");
+  const [diarizeEnabled, setDiarizeEnabled] = useState(false);
   const [llmProviders, setLlmProviders] = useState<LlmProvider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("groq");
   const [tagging, setTagging] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Tag editor dialog state
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
@@ -122,7 +145,7 @@ export default function ProjectDetailPage({
     txStore.reset();
     txStore.connect(projectId);
     try {
-      await api.projects.transcribe(projectId, selectedEngine);
+      await api.projects.transcribe(projectId, selectedEngine, diarizeEnabled);
       const proj = await api.projects.get(projectId);
       setProject(proj);
     } catch {
@@ -166,6 +189,27 @@ export default function ProjectDetailPage({
       // handle error
     } finally {
       setTagging(false);
+    }
+  };
+
+  const handleExport = async (format: "srt" | "vtt" | "txt" | "json" | "edl") => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { blob, filename } = await api.exports.create(projectId, format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert(HE.export.exportError);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -297,6 +341,18 @@ export default function ProjectDetailPage({
                   </select>
                 )}
               {(project.status === "uploaded" || project.status === "transcribed") && (
+                <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={diarizeEnabled}
+                    onChange={(e) => setDiarizeEnabled(e.target.checked)}
+                    disabled={transcribing}
+                    className="h-4 w-4 rounded border-muted-foreground/30 accent-purple-500"
+                  />
+                  {HE.transcript.diarize}
+                </label>
+              )}
+              {(project.status === "uploaded" || project.status === "transcribed") && (
                 <Button onClick={handleTranscribe} disabled={transcribing}>
                   <Play className="h-4 w-4 me-2" />
                   {transcribing ? HE.common.loading : HE.project.transcribe}
@@ -333,10 +389,32 @@ export default function ProjectDetailPage({
                     </Button>
                   </>
                 )}
-              <Button variant="outline">
-                <Download className="h-4 w-4 me-2" />
-                {HE.project.export}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  disabled={exporting || segments.length === 0}
+                  render={<Button variant="outline" />}
+                >
+                  <Download className="h-4 w-4 me-2" />
+                  {exporting ? HE.export.downloading : HE.project.export}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExport("srt")}>
+                    {HE.export.formats.srt}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("vtt")}>
+                    {HE.export.formats.vtt}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("txt")}>
+                    {HE.export.formats.txt}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("json")}>
+                    {HE.export.formats.json}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("edl")}>
+                    {HE.export.formats.edl}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
@@ -374,13 +452,21 @@ export default function ProjectDetailPage({
                     [
                       { key: "extracting_audio", label: HE.transcript.extractingAudio },
                       { key: "processing", label: HE.transcript.transcribing },
+                      ...(diarizeEnabled
+                        ? ([{ key: "diarizing", label: HE.transcript.diarizing }] as const)
+                        : []),
                     ] as const
                   ).map((step, i) => {
-                    const isActive =
-                      txStore.status === step.key;
-                    const isDone =
-                      step.key === "extracting_audio" &&
-                      (txStore.status === "processing" || txStore.status === "complete");
+                    const isActive = txStore.status === step.key;
+                    const order: string[] = [
+                      "extracting_audio",
+                      "processing",
+                      "diarizing",
+                      "complete",
+                    ];
+                    const currentIdx = order.indexOf(txStore.status);
+                    const stepIdx = order.indexOf(step.key);
+                    const isDone = currentIdx > stepIdx && stepIdx !== -1;
                     return (
                       <div key={step.key} className="flex items-center gap-2">
                         <div className="relative flex items-center justify-center">
@@ -507,15 +593,21 @@ export default function ProjectDetailPage({
                 <CardContent>
                   {hasTranscript ? (
                     <ScrollArea className="h-[500px]">
-                      <div className="space-y-1">
+                      <motion.div
+                        className="space-y-1"
+                        variants={listContainerVariants}
+                        initial="hidden"
+                        animate="visible"
+                      >
                         {segments.map((seg) => {
                           const isActive = seg.id === activeSegmentId;
                           const isEditing = seg.id === editingSegmentId;
 
                           return (
-                            <div
+                            <motion.div
                               key={seg.id}
                               ref={isActive ? activeSegRef : undefined}
+                              variants={listItemVariants}
                               className={`group flex gap-3 rounded-lg p-3 transition-colors ${
                                 isActive
                                   ? "bg-purple-50 dark:bg-purple-950/30 border-r-2"
@@ -576,12 +668,25 @@ export default function ProjectDetailPage({
                                 </div>
                               ) : (
                                 <div className="flex-1 flex items-start gap-2">
-                                  <p
-                                    className="text-sm leading-relaxed flex-1 cursor-pointer"
-                                    onDoubleClick={() => startEditing(seg)}
-                                  >
-                                    {seg.text}
-                                  </p>
+                                  <div className="flex-1">
+                                    {seg.speaker && (
+                                      <span
+                                        className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold me-2 align-middle"
+                                        style={{
+                                          backgroundColor: `${speakerColor(seg.speaker)}20`,
+                                          color: speakerColor(seg.speaker),
+                                        }}
+                                      >
+                                        {speakerLabel(seg.speaker)}
+                                      </span>
+                                    )}
+                                    <p
+                                      className="inline text-sm leading-relaxed cursor-pointer"
+                                      onDoubleClick={() => startEditing(seg)}
+                                    >
+                                      {seg.text}
+                                    </p>
+                                  </div>
                                   <button
                                     onClick={() => startEditing(seg)}
                                     className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
@@ -591,10 +696,10 @@ export default function ProjectDetailPage({
                                   </button>
                                 </div>
                               )}
-                            </div>
+                            </motion.div>
                           );
                         })}
-                      </div>
+                      </motion.div>
                     </ScrollArea>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -648,10 +753,21 @@ export default function ProjectDetailPage({
                 <CardContent>
                   {tags.length > 0 ? (
                     <ScrollArea className="h-[500px]">
-                      <div className="space-y-2">
+                      <motion.div
+                        className="space-y-2"
+                        variants={listContainerVariants}
+                        initial="hidden"
+                        animate="visible"
+                      >
+                        <AnimatePresence initial={false}>
                         {tags.map((tag) => (
-                          <div
+                          <motion.div
                             key={tag.id}
+                            layout
+                            variants={listItemVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
                             className="group rounded-lg border p-3 space-y-1 cursor-pointer hover:bg-muted/50 transition-colors"
                             onClick={() => {
                               if (tag.timestamp != null) seekTo(tag.timestamp);
@@ -713,9 +829,10 @@ export default function ProjectDetailPage({
                                 {tag.notes}
                               </p>
                             )}
-                          </div>
+                          </motion.div>
                         ))}
-                      </div>
+                        </AnimatePresence>
+                      </motion.div>
                     </ScrollArea>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-8 text-center">

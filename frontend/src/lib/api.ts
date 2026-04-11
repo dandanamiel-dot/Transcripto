@@ -94,11 +94,16 @@ export const api = {
       }),
     delete: (id: number) =>
       request<void>(`/api/projects/${id}`, { method: "DELETE" }),
-    transcribe: (id: number, engine?: string) =>
-      request<{ message: string }>(
-        `/api/projects/${id}/transcribe${engine ? `?engine=${encodeURIComponent(engine)}` : ""}`,
+    transcribe: (id: number, engine?: string, diarize?: boolean) => {
+      const params = new URLSearchParams();
+      if (engine) params.set("engine", engine);
+      if (diarize != null) params.set("diarize", String(diarize));
+      const query = params.toString();
+      return request<{ message: string }>(
+        `/api/projects/${id}/transcribe${query ? `?${query}` : ""}`,
         { method: "POST" },
-      ),
+      );
+    },
   },
 
   segments: {
@@ -144,10 +149,35 @@ export const api = {
   },
 
   exports: {
-    create: (projectId: number, format: string) =>
-      request<{ file_path: string }>(`/api/projects/${projectId}/export`, {
+    create: async (
+      projectId: number,
+      format: string,
+    ): Promise<{ blob: Blob; filename: string }> => {
+      const res = await fetch(`${BACKEND_URL}/api/projects/${projectId}/export`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format }),
-      }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Export failed ${res.status}: ${body}`);
+      }
+      const blob = await res.blob();
+      // Parse Content-Disposition for a filename if available.
+      const disposition = res.headers.get("content-disposition") || "";
+      let filename = `transcript.${format}`;
+      const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      if (utf8Match) {
+        try {
+          filename = decodeURIComponent(utf8Match[1]);
+        } catch {
+          /* ignore */
+        }
+      } else {
+        const basicMatch = disposition.match(/filename="([^"]+)"/i);
+        if (basicMatch) filename = basicMatch[1];
+      }
+      return { blob, filename };
+    },
   },
 };

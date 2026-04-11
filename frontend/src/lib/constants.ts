@@ -47,6 +47,14 @@ export const HE = {
     supportedFormats: "פורמטים נתמכים: MP4, MP3, WAV, M4A, WebM, OGG",
     newProject: "פרויקט חדש",
     allProjects: "כל הפרויקטים",
+    multipleFiles: "העלאה מרובה",
+    filesSelected: "קבצים נבחרו",
+    uploadingFile: "מעלה",
+    batchUploadComplete: "ההעלאה הושלמה",
+    searchProjects: "חיפוש פרויקטים...",
+    noResults: "לא נמצאו פרויקטים",
+    filterByStatus: "סנן לפי סטטוס",
+    all: "הכל",
   },
 
   // Status
@@ -114,6 +122,8 @@ export const HE = {
     confidence: "ביטחון",
     extractingAudio: "מחלץ אודיו...",
     transcribing: "מתמלל...",
+    diarizing: "מזהה דוברים...",
+    diarize: "זיהוי דוברים",
     transcriptionComplete: "התמלול הושלם",
     transcriptionError: "שגיאה בתמלול",
     liveSegments: "קטעים בזמן אמת",
@@ -131,6 +141,16 @@ export const HE = {
     title: "ייצוא",
     format: "פורמט",
     download: "הורדה",
+    downloading: "מוריד...",
+    exportSuccess: "הקובץ הורד בהצלחה",
+    exportError: "שגיאה בייצוא",
+    formats: {
+      srt: "SRT (כתוביות)",
+      vtt: "VTT (אינטרנט)",
+      txt: "TXT (טקסט)",
+      json: "JSON (נתונים מלאים)",
+      edl: "EDL (עורכי וידאו)",
+    },
   },
 
   // Common
@@ -158,6 +178,48 @@ export const STATUS_COLORS: Record<string, string> = {
   reviewed: "bg-cyan-100 text-cyan-700",
   completed: "bg-green-100 text-green-700",
 };
+
+// Hebrew letters alef..yod for speaker labels
+const SPEAKER_HEBREW_LETTERS = [
+  "א",
+  "ב",
+  "ג",
+  "ד",
+  "ה",
+  "ו",
+  "ז",
+  "ח",
+  "ט",
+  "י",
+];
+
+/** Map a pyannote speaker id like "SPEAKER_00" to a Hebrew label "דובר א". */
+export function speakerLabel(speaker: string | null | undefined): string | null {
+  if (!speaker) return null;
+  const match = speaker.match(/(\d+)/);
+  if (!match) return speaker;
+  const idx = parseInt(match[1], 10);
+  const letter = SPEAKER_HEBREW_LETTERS[idx] ?? String(idx + 1);
+  return `דובר ${letter}`;
+}
+
+/** Consistent color per speaker index. */
+export function speakerColor(speaker: string | null | undefined): string {
+  const palette = [
+    "#8B5CF6",
+    "#F59E0B",
+    "#10B981",
+    "#EF4444",
+    "#3B82F6",
+    "#EC4899",
+    "#14B8A6",
+    "#F97316",
+  ];
+  if (!speaker) return palette[0];
+  const match = speaker.match(/(\d+)/);
+  const idx = match ? parseInt(match[1], 10) : 0;
+  return palette[idx % palette.length];
+}
 
 export const TAG_CATEGORY_COLORS: Record<string, string> = {
   quote: "#8B5CF6",
