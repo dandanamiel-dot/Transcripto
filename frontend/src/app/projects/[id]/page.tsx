@@ -14,6 +14,7 @@ import {
   X,
   Plus,
   Trash2,
+  Star,
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -32,7 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { api, type Project, type Segment, type Tag, type Engine, type LlmProvider } from "@/lib/api";
-import { HE, TAG_CATEGORY_COLORS, speakerColor, speakerLabel } from "@/lib/constants";
+import { HE, TAG_CATEGORY_COLORS, speakerColor, speakerLabel, speakerDefaultLabel } from "@/lib/constants";
 import { TagEditorDialog } from "@/components/project/tag-editor-dialog";
 import { usePlayerStore } from "@/stores/player-store";
 import { useTranscriptionStore } from "@/stores/transcription-store";
@@ -96,6 +97,11 @@ export default function ProjectDetailPage({
   const [editingSegmentId, setEditingSegmentId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // Speaker name editing state
+  const [editingSpeaker, setEditingSpeaker] = useState<string | null>(null);
+  const [speakerNameInput, setSpeakerNameInput] = useState("");
+  const speakerInputRef = useRef<HTMLInputElement>(null);
 
   // Player store
   const { currentTime, activeSegmentId, setActiveSegmentId, seekTo } =
@@ -277,6 +283,106 @@ export default function ProjectDetailPage({
     },
     [cancelEditing, saveEditing],
   );
+
+  // --- Speaker name editing ---
+  const startEditingSpeaker = useCallback((speakerId: string) => {
+    setEditingSpeaker(speakerId);
+    const currentName = project?.speaker_names?.[speakerId] || "";
+    setSpeakerNameInput(currentName);
+    setTimeout(() => speakerInputRef.current?.focus(), 0);
+  }, [project?.speaker_names]);
+
+  const cancelEditingSpeaker = useCallback(() => {
+    setEditingSpeaker(null);
+    setSpeakerNameInput("");
+  }, []);
+
+  const saveSpeakerName = useCallback(
+    async (speakerId: string) => {
+      const name = speakerNameInput.trim();
+      const updated = { ...(project?.speaker_names || {}) };
+      if (name) {
+        updated[speakerId] = name;
+      } else {
+        delete updated[speakerId];
+      }
+      setEditingSpeaker(null);
+      // Optimistic update
+      if (project) {
+        setProject({ ...project, speaker_names: Object.keys(updated).length > 0 ? updated : null });
+      }
+      try {
+        await api.projects.update(projectId, { speaker_names: Object.keys(updated).length > 0 ? updated : null } as Partial<Project>);
+      } catch {
+        // Revert on error
+        const proj = await api.projects.get(projectId);
+        setProject(proj);
+      }
+    },
+    [speakerNameInput, project, projectId],
+  );
+
+  const handleSpeakerKeyDown = useCallback(
+    (e: React.KeyboardEvent, speakerId: string) => {
+      if (e.key === "Escape") cancelEditingSpeaker();
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        saveSpeakerName(speakerId);
+      }
+    },
+    [cancelEditingSpeaker, saveSpeakerName],
+  );
+
+  // --- Star a segment (create a quote tag) ---
+  const handleStarSegment = useCallback(
+    async (seg: Segment) => {
+      // Check if already starred (has a quote tag linked to this segment)
+      const existing = tags.find(
+        (t) => t.segment_id === seg.id && t.category === "quote" && t.tag_type === "manual",
+      );
+      if (existing) {
+        // Unstar — remove the tag
+        await api.tags.delete(projectId, existing.id);
+        setTags((prev) => prev.filter((t) => t.id !== existing.id));
+        return;
+      }
+      const label = seg.text.length > 50 ? seg.text.slice(0, 50) + "…" : seg.text;
+      try {
+        const created = await api.tags.create(projectId, {
+          label,
+          tag_type: "manual",
+          category: "quote",
+          segment_id: seg.id,
+          timestamp: seg.start_time,
+          end_timestamp: seg.end_time,
+          color: TAG_CATEGORY_COLORS.quote,
+        });
+        setTags((prev) => [...prev, created]);
+      } catch {
+        // ignore
+      }
+    },
+    [tags, projectId],
+  );
+
+  // --- Open tag editor pre-filled for a segment ---
+  const handleTagFromSegment = useCallback((seg: Segment) => {
+    // We'll create a temporary tag-like object for the editor to pre-fill
+    setEditingTag({
+      id: 0,
+      project_id: projectId,
+      segment_id: seg.id,
+      label: "",
+      tag_type: "manual",
+      category: "keyword",
+      timestamp: seg.start_time,
+      end_timestamp: seg.end_time,
+      color: TAG_CATEGORY_COLORS.keyword,
+      notes: null,
+      created_at: "",
+    } as Tag);
+    setTagDialogOpen(true);
+  }, [projectId]);
 
   if (loading) {
     return (
@@ -670,15 +776,32 @@ export default function ProjectDetailPage({
                                 <div className="flex-1 flex items-start gap-2">
                                   <div className="flex-1">
                                     {seg.speaker && (
-                                      <span
-                                        className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold me-2 align-middle"
-                                        style={{
-                                          backgroundColor: `${speakerColor(seg.speaker)}20`,
-                                          color: speakerColor(seg.speaker),
-                                        }}
-                                      >
-                                        {speakerLabel(seg.speaker)}
-                                      </span>
+                                      editingSpeaker === seg.speaker ? (
+                                        <span className="inline-flex items-center gap-1 me-2 align-middle">
+                                          <input
+                                            ref={speakerInputRef}
+                                            value={speakerNameInput}
+                                            onChange={(e) => setSpeakerNameInput(e.target.value)}
+                                            onKeyDown={(e) => handleSpeakerKeyDown(e, seg.speaker!)}
+                                            onBlur={() => saveSpeakerName(seg.speaker!)}
+                                            placeholder={speakerDefaultLabel(seg.speaker!)}
+                                            dir="rtl"
+                                            className="h-5 w-24 rounded border bg-background px-1.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                          />
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={() => startEditingSpeaker(seg.speaker!)}
+                                          className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold me-2 align-middle cursor-pointer hover:ring-1 hover:ring-purple-400 transition-all"
+                                          style={{
+                                            backgroundColor: `${speakerColor(seg.speaker)}20`,
+                                            color: speakerColor(seg.speaker),
+                                          }}
+                                          title={HE.transcript.renameSpeaker}
+                                        >
+                                          {speakerLabel(seg.speaker, project?.speaker_names)}
+                                        </button>
+                                      )
                                     )}
                                     <p
                                       className="inline text-sm leading-relaxed cursor-pointer"
@@ -687,13 +810,39 @@ export default function ProjectDetailPage({
                                       {seg.text}
                                     </p>
                                   </div>
-                                  <button
-                                    onClick={() => startEditing(seg)}
-                                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"
-                                    title={HE.project.edit}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </button>
+                                  <div className={`shrink-0 flex items-center gap-0.5 transition-opacity ${
+                                    tags.some((t) => t.segment_id === seg.id && t.category === "quote" && t.tag_type === "manual")
+                                      ? "opacity-100"
+                                      : "opacity-0 group-hover:opacity-100"
+                                  }`}>
+                                    <button
+                                      onClick={() => handleStarSegment(seg)}
+                                      className="p-1 rounded hover:bg-muted"
+                                      title={HE.tags.starLine}
+                                    >
+                                      <Star
+                                        className={`h-3.5 w-3.5 ${
+                                          tags.some((t) => t.segment_id === seg.id && t.category === "quote" && t.tag_type === "manual")
+                                            ? "fill-yellow-400 text-yellow-400"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      />
+                                    </button>
+                                    <button
+                                      onClick={() => handleTagFromSegment(seg)}
+                                      className="p-1 rounded hover:bg-muted"
+                                      title={HE.tags.tagLine}
+                                    >
+                                      <TagIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </button>
+                                    <button
+                                      onClick={() => startEditing(seg)}
+                                      className="p-1 rounded hover:bg-muted"
+                                      title={HE.project.edit}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </motion.div>

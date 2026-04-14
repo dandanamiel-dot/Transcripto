@@ -90,6 +90,8 @@ export const HE = {
     segment: "קטע",
     selectCategory: "בחר קטגוריה",
     selectSegment: "בחר קטע",
+    starLine: "סמן שורה",
+    tagLine: "הוסף תגית לשורה",
     noTags: "אין תגיות עדיין",
     autoTagging: "מתייג אוטומטית...",
     confirmDelete: "האם למחוק תגית זו?",
@@ -124,6 +126,7 @@ export const HE = {
     transcribing: "מתמלל...",
     diarizing: "מזהה דוברים...",
     diarize: "זיהוי דוברים",
+    renameSpeaker: "שנה שם דובר",
     transcriptionComplete: "התמלול הושלם",
     transcriptionError: "שגיאה בתמלול",
     liveSegments: "קטעים בזמן אמת",
@@ -193,9 +196,23 @@ const SPEAKER_HEBREW_LETTERS = [
   "י",
 ];
 
-/** Map a pyannote speaker id like "SPEAKER_00" to a Hebrew label "דובר א". */
-export function speakerLabel(speaker: string | null | undefined): string | null {
+/** Map a pyannote speaker id like "SPEAKER_00" to a Hebrew label "דובר א".
+ *  If speakerNames map is provided and contains a custom name, use that instead. */
+export function speakerLabel(
+  speaker: string | null | undefined,
+  speakerNames?: Record<string, string> | null,
+): string | null {
   if (!speaker) return null;
+  if (speakerNames?.[speaker]) return speakerNames[speaker];
+  const match = speaker.match(/(\d+)/);
+  if (!match) return speaker;
+  const idx = parseInt(match[1], 10);
+  const letter = SPEAKER_HEBREW_LETTERS[idx] ?? String(idx + 1);
+  return `דובר ${letter}`;
+}
+
+/** Get the default (non-custom) label for a speaker id. */
+export function speakerDefaultLabel(speaker: string): string {
   const match = speaker.match(/(\d+)/);
   if (!match) return speaker;
   const idx = parseInt(match[1], 10);

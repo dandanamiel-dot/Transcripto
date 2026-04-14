@@ -22,6 +22,7 @@ export interface Project {
   duration_seconds: number | null;
   status: string;
   transcription_engine: string | null;
+  speaker_names: Record<string, string> | null;
   created_at: string;
   updated_at: string;
 }

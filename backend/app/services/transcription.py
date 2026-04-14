@@ -96,7 +96,7 @@ async def run_transcription(
                 await cb({"type": "status", "step": "diarizing"})
                 try:
                     turns = await asyncio.to_thread(
-                        diarize, audio_path, settings.hf_token
+                        diarize, audio_path, settings.hf_token, settings.max_speakers
                     )
                     assign_speakers(segments_data, turns)
                     logger.info(

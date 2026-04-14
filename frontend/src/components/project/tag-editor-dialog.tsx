@@ -58,7 +58,7 @@ export function TagEditorDialog({
   tag,
   onSave,
 }: TagEditorDialogProps) {
-  const isEdit = !!tag;
+  const isEdit = !!tag && tag.id !== 0;
 
   const [label, setLabel] = useState("");
   const [category, setCategory] = useState<string>("keyword");

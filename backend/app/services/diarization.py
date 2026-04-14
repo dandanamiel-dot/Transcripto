@@ -59,14 +59,14 @@ def _load_pipeline(hf_token: str):
     return pipeline
 
 
-def diarize(audio_path: str, hf_token: str) -> list[dict]:
+def diarize(audio_path: str, hf_token: str, max_speakers: int = 6) -> list[dict]:
     """Run diarization on a WAV file and return a list of speaker turns.
 
     Each item: {"start": float, "end": float, "speaker": "SPEAKER_00"}
     Callers are responsible for running this inside asyncio.to_thread.
     """
     pipeline = _load_pipeline(hf_token)
-    diarization = pipeline(audio_path)
+    diarization = pipeline(audio_path, max_speakers=max_speakers)
 
     turns: list[dict] = []
     for turn, _track, speaker in diarization.itertracks(yield_label=True):

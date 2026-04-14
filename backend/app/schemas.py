@@ -12,6 +12,7 @@ class ProjectUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     status: str | None = None
+    speaker_names: dict[str, str] | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -24,6 +25,7 @@ class ProjectResponse(BaseModel):
     duration_seconds: float | None
     status: str
     transcription_engine: str | None
+    speaker_names: dict[str, str] | None
     created_at: datetime
     updated_at: datetime
 
