@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     hf_token: str = ""  # Hugging Face access token for pyannote.audio
     enable_diarization: bool = False  # default off; per-job flag overrides
     max_speakers: int = 6  # cap for pyannote speaker detection
+    diarize_timeout_seconds: int = 1800  # soft cap; on timeout, transcript saves without speakers
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

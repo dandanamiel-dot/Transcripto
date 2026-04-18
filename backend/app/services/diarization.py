@@ -10,9 +10,11 @@ module, since the model download is large (~500MB) and model init is slow.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+ProgressFn = Callable[[str, int, int], None]
 
 _pipeline = None
 _pipeline_error: Optional[str] = None
@@ -59,14 +61,42 @@ def _load_pipeline(hf_token: str):
     return pipeline
 
 
-def diarize(audio_path: str, hf_token: str, max_speakers: int = 6) -> list[dict]:
+def diarize(
+    audio_path: str,
+    hf_token: str,
+    max_speakers: int = 6,
+    on_progress: Optional[ProgressFn] = None,
+) -> list[dict]:
     """Run diarization on a WAV file and return a list of speaker turns.
 
     Each item: {"start": float, "end": float, "speaker": "SPEAKER_00"}
     Callers are responsible for running this inside asyncio.to_thread.
+
+    If `on_progress` is given, it is called on pipeline sub-step updates as
+    `on_progress(step_name, completed, total)`. The callback runs on the
+    worker thread — the caller is responsible for marshaling it back to the
+    event loop (e.g. `loop.call_soon_threadsafe`).
     """
     pipeline = _load_pipeline(hf_token)
-    diarization = pipeline(audio_path, max_speakers=max_speakers)
+
+    def _hook(
+        step_name: str,
+        step_artifact: Any,
+        file: Optional[dict] = None,
+        total: Optional[int] = None,
+        completed: Optional[int] = None,
+    ) -> None:
+        if on_progress is None:
+            return
+        c = int(completed) if completed is not None else 0
+        t = int(total) if total is not None else 1
+        try:
+            on_progress(step_name, c, t)
+        except Exception:
+            logger.exception("diarize on_progress callback failed")
+
+    logger.info(f"diarize: starting pipeline on {audio_path} (max_speakers={max_speakers})")
+    diarization = pipeline(audio_path, hook=_hook, max_speakers=max_speakers)
 
     turns: list[dict] = []
     for turn, _track, speaker in diarization.itertracks(yield_label=True):

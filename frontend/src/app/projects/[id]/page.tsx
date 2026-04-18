@@ -127,8 +127,34 @@ export default function ProjectDetailPage({
         setTags(tgs);
         setEngines(engs);
         setLlmProviders(providers);
+
+        // If a transcription is already in progress server-side, re-subscribe
+        // so the progress bar rehydrates after a page refresh.
+        const inProgress =
+          proj.status === "extracting_audio" ||
+          proj.status === "processing" ||
+          proj.status === "diarizing";
+        if (inProgress) {
+          setTranscribing(true);
+          const rawStep = proj.progress_step ?? proj.status;
+          const isDiarize =
+            typeof rawStep === "string" && rawStep.startsWith("diarizing");
+          const status = (isDiarize ? "diarizing" : rawStep) as
+            | "extracting_audio"
+            | "processing"
+            | "diarizing";
+          const diarizeSeed =
+            isDiarize && rawStep.includes(":")
+              ? {
+                  subStep: rawStep.split(":", 2)[1],
+                  percent: proj.progress_current ?? 0,
+                }
+              : undefined;
+          txStore.connect(projectId, status, diarizeSeed);
+        }
       })
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   // Sync player time → active segment highlight
@@ -527,7 +553,11 @@ export default function ProjectDetailPage({
           {/* Media Player */}
           {hasAudio && (
             <div className="mb-6">
-              <MediaPlayer projectId={projectId} tags={tags} />
+              <MediaPlayer
+                projectId={projectId}
+                tags={tags}
+                originalFilename={project.original_filename}
+              />
             </div>
           )}
 
@@ -610,8 +640,14 @@ export default function ProjectDetailPage({
                 {/* Progress bar */}
                 {(() => {
                   const lastSeg = txStore.liveSegments[txStore.liveSegments.length - 1];
-                  const progress =
-                    txStore.status === "extracting_audio"
+                  const isDiarizing = txStore.status === "diarizing";
+                  // Pick a progress source based on current step:
+                  //  - extracting_audio → indeterminate (null)
+                  //  - diarizing → pyannote sub-step percent (0 until first hook event)
+                  //  - processing → segment.end_time / duration
+                  const progress = isDiarizing
+                    ? txStore.diarizePercent ?? 0
+                    : txStore.status === "extracting_audio"
                       ? null
                       : txStore.duration && lastSeg
                         ? Math.min(
@@ -619,6 +655,11 @@ export default function ProjectDetailPage({
                             99,
                           )
                         : 0;
+                  const subStepLabel =
+                    isDiarizing && txStore.diarizeSubStep
+                      ? HE.transcript.diarizeSteps[txStore.diarizeSubStep] ??
+                        txStore.diarizeSubStep
+                      : null;
                   return (
                     <div className="space-y-2">
                       <div dir="ltr" className="relative h-2.5 w-full rounded-full bg-muted overflow-hidden">
@@ -645,11 +686,13 @@ export default function ProjectDetailPage({
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>
-                          {txStore.liveSegments.length > 0
-                            ? `${txStore.liveSegments.length} ${HE.transcript.segments}`
-                            : txStore.status === "extracting_audio"
-                              ? HE.transcript.extractingAudio
-                              : HE.common.loading}
+                          {isDiarizing
+                            ? subStepLabel ?? HE.transcript.diarizing
+                            : txStore.liveSegments.length > 0
+                              ? `${txStore.liveSegments.length} ${HE.transcript.segments}`
+                              : txStore.status === "extracting_audio"
+                                ? HE.transcript.extractingAudio
+                                : HE.common.loading}
                         </span>
                         {progress !== null && progress > 0 && (
                           <span className="font-mono tabular-nums">

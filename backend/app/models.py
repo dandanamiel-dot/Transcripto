@@ -19,6 +19,8 @@ class Project(Base):
     status: Mapped[str] = mapped_column(String(50), default="uploaded")
     transcription_engine: Mapped[str | None] = mapped_column(String(100), nullable=True)
     speaker_names: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    progress_step: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    progress_current: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

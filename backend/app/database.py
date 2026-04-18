@@ -26,10 +26,13 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
     # Add columns that create_all won't add to existing tables
     async with engine.begin() as conn:
-        try:
-            await conn.execute(
-                text("ALTER TABLE projects ADD COLUMN speaker_names JSON")
-            )
-            logger.info("Added speaker_names column to projects table")
-        except Exception:
-            pass  # column already exists
+        for col_ddl in (
+            "ALTER TABLE projects ADD COLUMN speaker_names JSON",
+            "ALTER TABLE projects ADD COLUMN progress_step VARCHAR(50)",
+            "ALTER TABLE projects ADD COLUMN progress_current INTEGER",
+        ):
+            try:
+                await conn.execute(text(col_ddl))
+                logger.info(f"Migrated: {col_ddl}")
+            except Exception:
+                pass  # column already exists

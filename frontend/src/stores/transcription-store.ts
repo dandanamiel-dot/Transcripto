@@ -18,8 +18,14 @@ interface TranscriptionState {
   error: string | null;
   ws: WebSocket | null;
   duration: number | null;
+  diarizeSubStep: string | null;
+  diarizePercent: number | null;
 
-  connect: (projectId: number) => void;
+  connect: (
+    projectId: number,
+    initialStatus?: TranscriptionStatus,
+    initialDiarize?: { subStep: string; percent: number },
+  ) => void;
   disconnect: () => void;
   reset: () => void;
 }
@@ -33,8 +39,14 @@ export const useTranscriptionStore = create<TranscriptionState>((set, get) => ({
   error: null,
   ws: null,
   duration: null,
+  diarizeSubStep: null,
+  diarizePercent: null,
 
-  connect: (projectId: number) => {
+  connect: (
+    projectId: number,
+    initialStatus?: TranscriptionStatus,
+    initialDiarize?: { subStep: string; percent: number },
+  ) => {
     const prev = get().ws;
     if (prev) prev.close();
 
@@ -46,7 +58,15 @@ export const useTranscriptionStore = create<TranscriptionState>((set, get) => ({
     );
 
     ws.onopen = () => {
-      set({ status: "idle", liveSegments: [], error: null, ws, duration: null });
+      set({
+        status: initialStatus ?? "idle",
+        liveSegments: [],
+        error: null,
+        ws,
+        duration: null,
+        diarizeSubStep: initialDiarize?.subStep ?? null,
+        diarizePercent: initialDiarize?.percent ?? null,
+      });
     };
 
     ws.onmessage = (event) => {
@@ -76,10 +96,21 @@ export const useTranscriptionStore = create<TranscriptionState>((set, get) => ({
             break;
           }
 
+          case "diarize_progress":
+            set({
+              status: "diarizing",
+              diarizeSubStep: data.sub_step ?? null,
+              diarizePercent:
+                typeof data.percent === "number" ? data.percent : null,
+            });
+            break;
+
           case "complete":
             set({
               status: "complete",
               segmentCount: data.segment_count,
+              diarizeSubStep: null,
+              diarizePercent: null,
             });
             break;
 
@@ -119,6 +150,8 @@ export const useTranscriptionStore = create<TranscriptionState>((set, get) => ({
       error: null,
       ws: null,
       duration: null,
+      diarizeSubStep: null,
+      diarizePercent: null,
     });
   },
 }));

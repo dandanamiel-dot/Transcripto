@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WaveformPlayer } from "@/components/project/waveform-player";
+import { VideoPreview, isVideoFilename } from "@/components/project/video-preview";
 import { usePlayerStore } from "@/stores/player-store";
 import { HE } from "@/lib/constants";
 import type { Tag } from "@/lib/api";
@@ -20,10 +21,13 @@ const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 export function MediaPlayer({
   projectId,
   tags = [],
+  originalFilename = null,
 }: {
   projectId: number;
   tags?: Tag[];
+  originalFilename?: string | null;
 }) {
+  const hasVideo = isVideoFilename(originalFilename);
   const {
     currentTime,
     duration,
@@ -50,6 +54,7 @@ export function MediaPlayer({
 
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3">
+      {hasVideo && <VideoPreview projectId={projectId} />}
       <WaveformPlayer projectId={projectId} tags={tags} />
 
       {/* Controls */}

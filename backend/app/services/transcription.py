@@ -46,6 +46,8 @@ async def run_transcription(
         try:
             # Step 1: Extract audio
             project.status = "extracting_audio"
+            project.progress_step = "extracting_audio"
+            project.progress_current = 0
             await db.commit()
             await cb({"type": "status", "step": "extracting_audio"})
 
@@ -58,6 +60,8 @@ async def run_transcription(
 
             # Step 2: Transcribe with selected engine
             project.status = "processing"
+            project.progress_step = "processing"
+            project.progress_current = 0
             await db.commit()
             await cb({"type": "status", "step": "processing", "duration": duration})
 
@@ -83,29 +87,119 @@ async def run_transcription(
             transcribe_task = asyncio.create_task(_transcribe())
 
             # Broadcast segments as they arrive
+            seg_count = 0
             while True:
                 seg_data = await segment_queue.get()
                 if seg_data is None:
                     break
+                seg_count += 1
                 await cb({"type": "segment", "data": seg_data})
+                # Persist progress every 5 segments so refresh can rehydrate
+                if seg_count % 5 == 0:
+                    project.progress_current = seg_count
+                    await db.commit()
+
+            project.progress_current = seg_count
+            await db.commit()
 
             segments_data = await transcribe_task
 
             # Step 2b: Optional speaker diarization
             if should_diarize:
+                project.progress_step = "diarizing"
+                project.progress_current = 0
+                await db.commit()
                 await cb({"type": "status", "step": "diarizing"})
-                try:
-                    turns = await asyncio.to_thread(
-                        diarize, audio_path, settings.hf_token, settings.max_speakers
+
+                # Stream pyannote sub-step progress back to the UI.
+                # The hook fires on the worker thread; we marshal via the loop.
+                diarize_queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+                def _on_diarize_progress(step_name: str, completed: int, total: int):
+                    loop.call_soon_threadsafe(
+                        diarize_queue.put_nowait,
+                        {"sub_step": step_name, "completed": completed, "total": total},
                     )
+
+                async def _diarize_thread():
+                    try:
+                        result = await asyncio.to_thread(
+                            diarize,
+                            audio_path,
+                            settings.hf_token,
+                            settings.max_speakers,
+                            _on_diarize_progress,
+                        )
+                        return result
+                    finally:
+                        await diarize_queue.put(None)  # sentinel
+
+                diarize_task = asyncio.create_task(_diarize_thread())
+
+                async def _drain_progress():
+                    last_percent = -1
+                    last_sub: str | None = None
+                    while True:
+                        evt = await diarize_queue.get()
+                        if evt is None:
+                            return
+                        sub = evt["sub_step"]
+                        total = max(evt["total"], 1)
+                        percent = min(round(evt["completed"] / total * 100), 99)
+                        changed_sub = sub != last_sub
+                        enough_delta = percent - last_percent >= 5
+                        if changed_sub or enough_delta or percent >= 99:
+                            if changed_sub:
+                                logger.info(
+                                    f"diarize[{project_id}] step={sub} "
+                                    f"{evt['completed']}/{evt['total']}"
+                                )
+                            await cb(
+                                {
+                                    "type": "diarize_progress",
+                                    "sub_step": sub,
+                                    "percent": percent,
+                                }
+                            )
+                            project.progress_step = f"diarizing:{sub}"
+                            project.progress_current = percent
+                            await db.commit()
+                            last_sub = sub
+                            last_percent = percent
+
+                drain_task = asyncio.create_task(_drain_progress())
+                try:
+                    turns = await asyncio.wait_for(
+                        diarize_task, timeout=settings.diarize_timeout_seconds
+                    )
+                    await drain_task
                     assign_speakers(segments_data, turns)
                     logger.info(
                         f"Diarization complete for project {project_id}: "
                         f"{len(turns)} turns across "
                         f"{len({t['speaker'] for t in turns})} speakers"
                     )
+                except asyncio.TimeoutError:
+                    # The worker thread keeps running (can't interrupt pyannote),
+                    # but we stop waiting and stop updating UI state. Unblock drain.
+                    diarize_task.cancel()
+                    drain_task.cancel()
+                    await diarize_queue.put(None)
+                    logger.warning(
+                        f"Diarization timed out after "
+                        f"{settings.diarize_timeout_seconds}s for project {project_id}"
+                    )
+                    await cb(
+                        {
+                            "type": "status",
+                            "step": "diarize_failed",
+                            "message": f"timeout after {settings.diarize_timeout_seconds}s",
+                        }
+                    )
                 except Exception as e:
                     # Non-fatal — keep the transcript, skip speaker labels.
+                    drain_task.cancel()
+                    await diarize_queue.put(None)
                     logger.exception(
                         f"Diarization failed for project {project_id}: {e}"
                     )
@@ -129,6 +223,8 @@ async def run_transcription(
 
             project.status = "transcribed"
             project.transcription_engine = engine_name
+            project.progress_step = None
+            project.progress_current = None
             await db.commit()
 
             await cb(
@@ -146,5 +242,7 @@ async def run_transcription(
         except Exception as e:
             logger.exception(f"Transcription failed for project {project_id}")
             project.status = "uploaded"
+            project.progress_step = None
+            project.progress_current = None
             await db.commit()
             await cb({"type": "error", "message": str(e)})

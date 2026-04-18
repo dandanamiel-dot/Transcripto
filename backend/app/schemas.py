@@ -26,6 +26,8 @@ class ProjectResponse(BaseModel):
     status: str
     transcription_engine: str | None
     speaker_names: dict[str, str] | None
+    progress_step: str | None = None
+    progress_current: int | None = None
     created_at: datetime
     updated_at: datetime
 

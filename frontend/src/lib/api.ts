@@ -23,6 +23,8 @@ export interface Project {
   status: string;
   transcription_engine: string | null;
   speaker_names: Record<string, string> | null;
+  progress_step: string | null;
+  progress_current: number | null;
   created_at: string;
   updated_at: string;
 }

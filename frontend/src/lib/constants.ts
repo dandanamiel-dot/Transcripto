@@ -126,6 +126,11 @@ export const HE = {
     transcribing: "מתמלל...",
     diarizing: "מזהה דוברים...",
     diarize: "זיהוי דוברים",
+    diarizeSteps: {
+      segmentation: "מחלק לדוברים",
+      embeddings: "מחשב טביעות קול",
+      discrete_diarization: "מסיים זיהוי דוברים",
+    } as Record<string, string>,
     renameSpeaker: "שנה שם דובר",
     transcriptionComplete: "התמלול הושלם",
     transcriptionError: "שגיאה בתמלול",
