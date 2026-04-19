@@ -3,7 +3,6 @@ import logging
 
 import httpx
 
-from app.config import settings
 from app.services.llm_providers.base import SYSTEM_PROMPT, TAG_TOOL_SCHEMA
 
 logger = logging.getLogger(__name__)
@@ -14,7 +13,7 @@ MODEL = "claude-sonnet-4-20250514"
 
 class AnthropicTaggingProvider:
     async def extract_tags(
-        self, transcript_text: str, segments: list[dict]
+        self, api_key: str, transcript_text: str, segments: list[dict]
     ) -> list[dict]:
         user_message = f"Transcript segments:\n{transcript_text}\n\nAnalyze the transcript and call the save_tags tool with the extracted tags."
 
@@ -22,7 +21,7 @@ class AnthropicTaggingProvider:
             resp = await client.post(
                 API_URL,
                 headers={
-                    "x-api-key": settings.anthropic_api_key,
+                    "x-api-key": api_key,
                     "anthropic-version": "2023-06-01",
                     "Content-Type": "application/json",
                 },

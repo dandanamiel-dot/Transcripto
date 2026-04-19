@@ -15,6 +15,7 @@ import {
   Plus,
   Trash2,
   Star,
+  Users,
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -35,6 +36,7 @@ import {
 import { api, type Project, type Segment, type Tag, type Engine, type LlmProvider } from "@/lib/api";
 import { HE, TAG_CATEGORY_COLORS, speakerColor, speakerLabel, speakerDefaultLabel } from "@/lib/constants";
 import { TagEditorDialog } from "@/components/project/tag-editor-dialog";
+import { SpeakerPanel } from "@/components/project/speaker-panel";
 import { usePlayerStore } from "@/stores/player-store";
 import { useTranscriptionStore } from "@/stores/transcription-store";
 
@@ -186,6 +188,20 @@ export default function ProjectDetailPage({
     }
   };
 
+  const handleRediarize = async () => {
+    setTranscribing(true);
+    txStore.reset();
+    txStore.connect(projectId, "diarizing");
+    try {
+      await api.projects.diarize(projectId);
+      const proj = await api.projects.get(projectId);
+      setProject(proj);
+    } catch {
+      setTranscribing(false);
+      txStore.reset();
+    }
+  };
+
   // When transcription completes via WS, refresh real data
   useEffect(() => {
     if (txStore.status === "complete") {
@@ -323,29 +339,36 @@ export default function ProjectDetailPage({
     setSpeakerNameInput("");
   }, []);
 
-  const saveSpeakerName = useCallback(
-    async (speakerId: string) => {
-      const name = speakerNameInput.trim();
+  const persistSpeakerName = useCallback(
+    async (speakerId: string, name: string) => {
       const updated = { ...(project?.speaker_names || {}) };
       if (name) {
         updated[speakerId] = name;
       } else {
         delete updated[speakerId];
       }
-      setEditingSpeaker(null);
-      // Optimistic update
+      const nextNames = Object.keys(updated).length > 0 ? updated : null;
       if (project) {
-        setProject({ ...project, speaker_names: Object.keys(updated).length > 0 ? updated : null });
+        setProject({ ...project, speaker_names: nextNames });
       }
       try {
-        await api.projects.update(projectId, { speaker_names: Object.keys(updated).length > 0 ? updated : null } as Partial<Project>);
+        await api.projects.update(projectId, {
+          speaker_names: nextNames,
+        } as Partial<Project>);
       } catch {
-        // Revert on error
         const proj = await api.projects.get(projectId);
         setProject(proj);
       }
     },
-    [speakerNameInput, project, projectId],
+    [project, projectId],
+  );
+
+  const saveSpeakerName = useCallback(
+    async (speakerId: string) => {
+      setEditingSpeaker(null);
+      await persistSpeakerName(speakerId, speakerNameInput.trim());
+    },
+    [speakerNameInput, persistSpeakerName],
   );
 
   const handleSpeakerKeyDown = useCallback(
@@ -488,6 +511,21 @@ export default function ProjectDetailPage({
                 <Button onClick={handleTranscribe} disabled={transcribing}>
                   <Play className="h-4 w-4 me-2" />
                   {transcribing ? HE.common.loading : HE.project.transcribe}
+                </Button>
+              )}
+              {(project.status === "transcribed" ||
+                project.status === "tagged" ||
+                project.status === "reviewed" ||
+                project.status === "completed") && (
+                <Button
+                  variant="outline"
+                  onClick={handleRediarize}
+                  disabled={transcribing}
+                >
+                  <Users className="h-4 w-4 me-2" />
+                  {transcribing
+                    ? HE.transcript.rediarizing
+                    : HE.transcript.rediarize}
                 </Button>
               )}
               {(project.status === "transcribed" ||
@@ -915,8 +953,14 @@ export default function ProjectDetailPage({
               </Card>
             </div>
 
-            {/* Tags sidebar */}
-            <div>
+            {/* Sidebar */}
+            <div className="space-y-4">
+              <SpeakerPanel
+                project={project}
+                segments={segments}
+                onRename={persistSpeakerName}
+                onSeekToSpeaker={seekTo}
+              />
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">

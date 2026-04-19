@@ -20,6 +20,7 @@ from app.routers import (
     media,
     projects,
     segments,
+    settings as settings_router,
     tags,
     transcribe,
     ws,
@@ -50,6 +51,7 @@ app.include_router(llm_providers.router)
 app.include_router(media.router)
 app.include_router(projects.router)
 app.include_router(segments.router)
+app.include_router(settings_router.router)
 app.include_router(tags.router)
 app.include_router(transcribe.router)
 app.include_router(ws.router)

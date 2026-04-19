@@ -4,8 +4,6 @@ from typing import Callable
 
 import httpx
 
-from app.config import settings
-
 logger = logging.getLogger(__name__)
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
@@ -19,8 +17,9 @@ class GroqCloudEngine:
         audio_path: str,
         language: str,
         on_segment: Callable[[int, dict], None] | None = None,
+        api_key: str = "",
     ) -> list[dict]:
-        if not settings.groq_api_key:
+        if not api_key:
             raise RuntimeError("GROQ_API_KEY is not configured")
 
         logger.info(f"GroqCloud: uploading {audio_path} for transcription")
@@ -28,7 +27,7 @@ class GroqCloudEngine:
         with open(audio_path, "rb") as f:
             response = httpx.post(
                 GROQ_API_URL,
-                headers={"Authorization": f"Bearer {settings.groq_api_key}"},
+                headers={"Authorization": f"Bearer {api_key}"},
                 data={
                     "model": "whisper-large-v3-turbo",
                     "language": language,

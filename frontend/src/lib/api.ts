@@ -68,6 +68,15 @@ export interface LlmProvider {
   available: boolean;
 }
 
+export interface ApiKeyStatus {
+  name: string;
+  label: string;
+  label_he: string;
+  is_set: boolean;
+  masked: string;
+  source: "db" | "env" | null;
+}
+
 export interface DashboardStats {
   total_projects: number;
   in_progress: number;
@@ -107,6 +116,10 @@ export const api = {
         { method: "POST" },
       );
     },
+    diarize: (id: number) =>
+      request<{ message: string }>(`/api/projects/${id}/diarize`, {
+        method: "POST",
+      }),
   },
 
   segments: {
@@ -149,6 +162,15 @@ export const api = {
 
   llmProviders: {
     list: () => request<LlmProvider[]>("/api/llm-providers"),
+  },
+
+  settings: {
+    listApiKeys: () => request<ApiKeyStatus[]>("/api/settings/api-keys"),
+    setApiKey: (name: string, value: string) =>
+      request<{ ok: boolean }>(`/api/settings/api-keys/${encodeURIComponent(name)}`, {
+        method: "PUT",
+        body: JSON.stringify({ value }),
+      }),
   },
 
   exports: {

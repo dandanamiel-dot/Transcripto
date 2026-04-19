@@ -57,6 +57,21 @@ def _load_pipeline(hf_token: str):
         logger.exception("Failed to load pyannote pipeline")
         raise RuntimeError(_pipeline_error) from e
 
+    # On Apple Silicon, the default CPU path takes 1–2h for a 60-min audio.
+    # MPS (Metal) is ~5–10x faster. Fall back silently if MPS isn't built
+    # or if any op in the pipeline refuses to move — we'd rather run slow
+    # than crash mid-diarization.
+    try:
+        import torch
+
+        if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+            pipeline = pipeline.to(torch.device("mps"))
+            logger.info("pyannote pipeline moved to MPS")
+        else:
+            logger.info("pyannote pipeline staying on CPU (MPS unavailable)")
+    except Exception:
+        logger.exception("Could not move pyannote to MPS — staying on CPU")
+
     _pipeline = pipeline
     return pipeline
 

@@ -132,6 +132,13 @@ export const HE = {
       discrete_diarization: "מסיים זיהוי דוברים",
     } as Record<string, string>,
     renameSpeaker: "שנה שם דובר",
+    rediarize: "הפעל מחדש זיהוי דוברים",
+    rediarizing: "מזהה דוברים מחדש...",
+    speakers: "דוברים",
+    noSpeakers: "אין מידע על דוברים",
+    runDiarize: "הפעל זיהוי דוברים",
+    speakerSegments: "קטעים",
+    speakerTime: "זמן דיבור",
     transcriptionComplete: "התמלול הושלם",
     transcriptionError: "שגיאה בתמלול",
     liveSegments: "קטעים בזמן אמת",
@@ -159,6 +166,23 @@ export const HE = {
       json: "JSON (נתונים מלאים)",
       edl: "EDL (עורכי וידאו)",
     },
+  },
+
+  // Settings
+  settings: {
+    title: "הגדרות",
+    apiKeysTitle: "מפתחות API",
+    apiKeysDescription:
+      "המפתחות נשמרים במסד הנתונים המקומי ומשמשים את מנועי התיוג האוטומטי וזיהוי הדוברים.",
+    placeholder: "הדבק מפתח כאן",
+    save: "שמור",
+    saved: "נשמר",
+    clear: "נקה",
+    isSet: "מוגדר",
+    notSet: "לא מוגדר",
+    sourceDb: "מוגדר במסד הנתונים",
+    sourceEnv: "מוגדר בקובץ .env",
+    saveError: "שמירה נכשלה",
   },
 
   // Common

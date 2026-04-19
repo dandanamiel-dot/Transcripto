@@ -16,9 +16,8 @@ logger = logging.getLogger(__name__)
 
 async def run_auto_tagging(project_id: int, provider_name: str = "groq") -> list[Tag]:
     """Run AI auto-tagging on a transcribed project. Returns created Tag objects."""
-    provider = get_provider(provider_name)
-
     async with async_session() as db:
+        provider, api_key = await get_provider(provider_name, db)
         project = await db.get(Project, project_id)
         if not project:
             raise ValueError("Project not found")
@@ -52,7 +51,7 @@ async def run_auto_tagging(project_id: int, provider_name: str = "groq") -> list
         await db.commit()
 
         try:
-            raw_tags = await provider.extract_tags(transcript_text, segments_data)
+            raw_tags = await provider.extract_tags(api_key, transcript_text, segments_data)
         except Exception:
             project.status = "transcribed"
             await db.commit()

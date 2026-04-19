@@ -76,7 +76,7 @@ def build_transcript_text(segments: list[dict]) -> str:
 
 class TaggingProvider(Protocol):
     async def extract_tags(
-        self, transcript_text: str, segments: list[dict]
+        self, api_key: str, transcript_text: str, segments: list[dict]
     ) -> list[dict]:
         """Send transcript to LLM, return list of tag dicts.
 

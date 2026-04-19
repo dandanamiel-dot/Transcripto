@@ -17,6 +17,7 @@ class WhisperLocalEngine:
         audio_path: str,
         language: str,
         on_segment: Callable[[int, dict], None] | None = None,
+        api_key: str = "",
     ) -> list[dict]:
         from faster_whisper import WhisperModel
 
